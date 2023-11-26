@@ -1,0 +1,148 @@
+---
+
+- name: Install wordpress
+  hosts: terra
+  gather_facts: False
+  become: true
+  tasks:
+    - name: Update
+      apt:
+        update_cache: yes
+      changed_when: False
+
+    - name: apache install
+      apt:
+        name: apache2
+        state: present
+      become: yes
+
+    - name: start apache
+      service:
+        name: apache2
+        state: started
+        enabled: yes
+      become: yes
+      
+    - name : install mysql server
+      apt: 
+        name: mysql-server
+        state: present
+      become: yes        
+
+    - name : install mysql client
+      apt: 
+        name: mysql-client
+        state: present
+      become: yes 
+
+    - name : start and enable mysql  
+      service:
+        name: mysql
+        state: started
+        enabled: yes
+      become: yes
+
+    - name: install php
+      apt: 
+        name: libapache2-mod-php8.1
+        state: present
+      become: yes
+
+    - name: install php mysql
+      apt: 
+        name: php-mysql
+        state: present
+      become: yes
+
+    - name: install php mysql
+      command: apt install php-mysql
+      changed_when: false
+
+    - name: install zip
+      apt: 
+        name: zip
+        state: present
+      become: yes
+
+    - name: install wordpress
+      ansible.builtin.get_url:
+        url: "https://wordpress.org/latest.tar.gz"
+        dest: /var/www/html
+    
+
+    - name: unzip the wordpress
+      ansible.builtin.command:
+        cmd: tar -xzvf /var/www/html/wordpress-6.4.1.tar.gz  -C /var/www/html
+      become: yes
+      changed_when: False
+    
+    - name: Check if wordpress is already added in config file
+      ansible.builtin.command:
+        cmd: grep -q '/var/www/html/wordpress' /etc/apache2/sites-enabled/000-default.conf
+      register: wordpress_added
+      ignore_errors: true
+      changed_when: false
+
+    - name: Add wordpress in config file if not already added
+      command: sed -i 's+/var/www/html+/var/www/html/wordpress+g' /etc/apache2/sites-enabled/000-default.conf
+      when: not wordpress_added.rc == 0
+      changed_when: false
+
+    - name: Check if wp-config.php exists
+      stat:
+        path: /var/www/html/wordpress/wp-config.php
+      register: wp_config_exists
+
+
+    - name: copy wp-config file 
+      command: cp /var/www/html/wordpress/wp-config-sample.php /var/www/html/wordpress/wp-config.php
+      when: not wp_config_exists.stat.exists
+      changed_when: false
+
+    
+    - name: add database
+      command: sed -i 's+database_name_here+wordpress_db+g' /var/www/html/wordpress/wp-config.php
+      changed_when: false
+
+    - name: add user
+      command: sed -i 's+username_here+roit+g' /var/www/html/wordpress/wp-config.php
+      changed_when: false
+
+    - name: add password
+      command: sed -i 's+password_here+password+g'  /var/www/html/wordpress/wp-config.php
+      changed_when: false
+
+    - name: restart apache2
+      command: systemctl restart apache2
+      changed_when: false
+    
+    
+    - name: Check if the database exists
+      shell: mysql -e "SHOW DATABASES LIKE 'wordpress_db';"
+      register: database_check
+      changed_when: False
+
+    - name: create database
+      command: mysql -e "create database wordpress_db;" 
+      when: "'wordpress_db' not in database_check.stdout"
+      changed_when: False
+    
+    - name: create user
+      command: mysql -e "CREATE USER 'roit'@'localhost' IDENTIFIED BY 'password';"
+      when: "'wordpress_db' not in database_check.stdout"
+      changed_when: False
+
+    - name: grant permission
+      command: mysql -e "GRANT ALL PRIVILEGES ON wordpress_db.* TO 'roit'@'localhost';"
+      when: "'wordpress_db' not in database_check.stdout"
+      changed_when: False
+
+    - name: FLUSH PRIVILEGES
+      command: mysql -e "FLUSH PRIVILEGES;"
+      when: "'wordpress_db' not in database_check.stdout"
+      changed_when: False
+    
+
+
+
+

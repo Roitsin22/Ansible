@@ -8,6 +8,7 @@
         name: "*"
         state: latest
       become: yes
+      # Now we install apache
 
     - name: Install Apache
       yum:
